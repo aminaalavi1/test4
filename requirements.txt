@@ -1,7 +1,8 @@
-streamlit
 openai
 pandas
 matplotlib
 seaborn
 git+https://github.com/microsoft/autogen.git
 flaml[automl]
+streamlit==1.39.0
+autogen-agentchat==0.2.36
