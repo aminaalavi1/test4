@@ -23,25 +23,6 @@ onboarding_personal_information_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-customer_engagement_agent = ConversableAgent(
-    name="customer_engagement_agent",
-    system_message='''You are a friendly and engaging patient service agent. Your task is to provide the customer with a personalized meal plan for the day. Tailor the meal plan based on the customer's chronic disease. The meal plan should include:
-    - Recipes for each meal, detailing the exact ingredients needed and how to cook the meal.
-    - A grocery list compiling all the ingredients required for the day.
-    - Serving sizes and calorie counts for each meal.
-    - Nutritional information like servings of greens, fruits, vegetables, fiber, proteins, etc.
-    Additionally, generate a data frame with Date, Meal (like breakfast/Lunch/Dinner), Fat%, calorie intake, and sugar.
-    Also, include a plot visualizing the nutritional information.''',
-    llm_config={"config_list": config_list},
-    code_execution_config={
-        "allowed_imports": ["pandas", "matplotlib", "seaborn"],
-        "execution_timeout": 60,
-        "use_docker": False  # Disable Docker for code execution
-    },
-    human_input_mode="NEVER",
-    is_termination_msg=lambda msg: "terminate" in msg.get("content").lower(),
-)
-
 customer_proxy_agent = ConversableAgent(
     name="customer_proxy_agent",
     llm_config=False,
@@ -67,11 +48,12 @@ if user_input := st.chat_input("You: "):
     # Display the user message
     with st.chat_message("user"):
         st.markdown(user_input)
-    
-    # Phase 1: Onboarding agent collects info
-    st.write("Phase 1: Onboarding agent collecting info...")
 
-    onboarding_chat = [
+    # Phase 1: Onboarding agent collects info
+    st.write("Phase 1: Onboarding agent sending message to customer proxy...")
+
+    # Simplified chat: Just passing message between two agents
+    simplified_chat = [
         {
             "sender": onboarding_personal_information_agent,
             "recipient": customer_proxy_agent,
@@ -82,16 +64,16 @@ if user_input := st.chat_input("You: "):
         }
     ]
 
-    # Start phase 1
+    # Start simplified chat interaction
     try:
-        phase1_results = initiate_chats(onboarding_chat)
+        simplified_results = initiate_chats(simplified_chat)
         
-        # Debugging: Show phase 1 results
-        st.write("Phase 1 Results:", phase1_results)
+        # Debugging: Show results from simplified chat
+        st.write("Simplified Chat Results:", simplified_results)
 
         # Check if there are results from the onboarding agent
-        if phase1_results and len(phase1_results) > 0:
-            onboarding_response = phase1_results[-1]['message']
+        if simplified_results and len(simplified_results) > 0:
+            onboarding_response = simplified_results[-1]['message']
 
             # Display onboarding response
             with st.chat_message("assistant"):
@@ -100,41 +82,9 @@ if user_input := st.chat_input("You: "):
             # Append onboarding response to chat history
             st.session_state.messages.append({"role": "assistant", "content": onboarding_response})
 
-            # Phase 2: Engagement agent generates meal plan
-            st.write("Phase 2: Engagement agent generating meal plan...")
-
-            engagement_chat = [
-                {
-                    "sender": customer_proxy_agent,
-                    "recipient": customer_engagement_agent,
-                    "message": "Now that we have the initial information, let's proceed with your meal plan.",
-                    "summary_method": "reflection_with_llm",
-                    "max_turns": 1,  # Engagement agent generates the meal plan
-                }
-            ]
-
-            # Start phase 2
-            phase2_results = initiate_chats(engagement_chat)
-
-            # Debugging: Show phase 2 results
-            st.write("Phase 2 Results:", phase2_results)
-
-            # Get the engagement response and display
-            if phase2_results and len(phase2_results) > 0:
-                engagement_response = phase2_results[-1]['message']
-
-                # Display engagement response
-                with st.chat_message("assistant"):
-                    st.markdown(engagement_response)
-
-                # Append engagement response to chat history
-                st.session_state.messages.append({"role": "assistant", "content": engagement_response})
-
-            else:
-                st.write("No response received from engagement agent.")
         else:
-            st.write("No response received from onboarding agent.")
+            st.write("No response received from onboarding agent or proxy agent.")
 
     except Exception as e:
-        st.error(f"An error occurred during chat interaction: {e}")
+        st.error(f"An error occurred during the simplified chat interaction: {e}")
         st.write(f"Error details: {e}")
