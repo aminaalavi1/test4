@@ -97,11 +97,11 @@ if user_input := st.chat_input("You: "):
 # Add a button to clear chat history
 if st.button("Clear Chat History"):
     st.session_state.messages = []
-    st.experimental_rerun()
+    st.rerun()
 
 # Display current date
 st.write(f"Current date: {time.strftime('%A, %B %d, %Y')}")
 
 # Add version information
-st.sidebar.write("App Version: 1.0.1")
+st.sidebar.write("App Version: 1.0.2")
 st.sidebar.write(f"Streamlit Version: {st.__version__}")
