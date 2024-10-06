@@ -1,6 +1,7 @@
 import streamlit as st
 import logging
 from autogen import ConversableAgent, initiate_chats
+import time
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -21,11 +22,12 @@ onboarding_personal_information_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
+# Change human_input_mode to NEVER for customer_proxy_agent to avoid interaction issues
 customer_proxy_agent = ConversableAgent(
     name="customer_proxy_agent",
     llm_config=False,
     code_execution_config={"use_docker": False},
-    human_input_mode="ALWAYS",
+    human_input_mode="NEVER",  # Change this to NEVER
     is_termination_msg=lambda msg: "terminate" in msg.get("content", "").lower(),
 )
 
@@ -50,6 +52,8 @@ if user_input:
     try:
         with st.spinner('Waiting for response...'):
             logging.info("Starting chat initiation...")
+            
+            # Prepare simplified chat
             simplified_chat = [
                 {
                     "sender": onboarding_personal_information_agent,
@@ -60,9 +64,15 @@ if user_input:
                     "clear_history": False
                 }
             ]
+            
+            # Log the chat configuration
+            logging.info(f"Simplified Chat Configuration: {simplified_chat}")
+            
+            # Initiate the chat interaction
             result = initiate_chats(simplified_chat)
             logging.info(f"Chat result: {result}")
 
+            # Check for result and process
             if result:
                 assistant_response = result[-1]['message']
                 with st.chat_message("assistant"):
@@ -70,6 +80,7 @@ if user_input:
                 st.session_state.messages.append({"role": "assistant", "content": assistant_response})
             else:
                 st.write("No response received from the agent.")
+                logging.warning("No response received from initiate_chats.")
 
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
