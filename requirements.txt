@@ -4,3 +4,4 @@ pandas
 matplotlib
 seaborn
 git+https://github.com/microsoft/autogen.git
+flaml[automl]
