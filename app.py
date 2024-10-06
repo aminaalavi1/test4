@@ -10,7 +10,7 @@ st.title("HealthBite Assistant")
 OPEN_API_KEY = st.secrets["OPENAI_API_KEY"]
 config_list = [{"model": "gpt-3.5-turbo", "api_key": OPEN_API_KEY}]
 
-# Initialize ConversableAgents
+# Initialize ConversableAgents and explicitly disable Docker
 onboarding_personal_information_agent = ConversableAgent(
     name="onboarding_personal_information_agent",
     system_message='''You are a helpful patient onboarding agent,
