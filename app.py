@@ -3,8 +3,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from autogen import ConversableAgent, initiate_chats
 import time
-from streamlit.scriptrunner import add_script_run_ctx
-import threading
 
 # Set up the title of the Streamlit app
 st.title("HealthBite Assistant")
@@ -43,30 +41,20 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Function to run chat with timeout
-def run_chat_with_timeout(user_input, timeout=30):
-    result = [None]
-    def wrapper():
-        simplified_chat = [
-            {
-                "sender": onboarding_personal_information_agent,
-                "recipient": customer_proxy_agent,
-                "message": user_input,
-                "summary_method": "reflection_with_llm",
-                "max_turns": 2,
-                "clear_history": False
-            }
-        ]
-        result[0] = initiate_chats(simplified_chat)
-
-    thread = threading.Thread(target=wrapper)
-    add_script_run_ctx(thread)
-    thread.start()
-    thread.join(timeout)
-    if thread.is_alive():
-        st.error("Operation timed out. Please try again.")
-        return None
-    return result[0]
+# Function to run chat
+@st.cache_data(show_spinner=False)
+def run_chat(user_input):
+    simplified_chat = [
+        {
+            "sender": onboarding_personal_information_agent,
+            "recipient": customer_proxy_agent,
+            "message": user_input,
+            "summary_method": "reflection_with_llm",
+            "max_turns": 2,
+            "clear_history": False
+        }
+    ]
+    return initiate_chats(simplified_chat)
 
 # Accept user input
 if user_input := st.chat_input("You: "):
@@ -80,10 +68,10 @@ if user_input := st.chat_input("You: "):
     # Phase 1: Onboarding agent collects info
     st.write("Phase 1: Onboarding agent sending message to customer proxy...")
 
-    # Start simplified chat interaction with timeout
+    # Start simplified chat interaction
     try:
         with st.spinner('Processing your request...'):
-            simplified_results = run_chat_with_timeout(user_input)
+            simplified_results = run_chat(user_input)
         
         # Debugging: Show results from simplified chat
         st.write("Debug: Simplified Chat Results:", simplified_results)
@@ -115,5 +103,5 @@ if st.button("Clear Chat History"):
 st.write(f"Current date: {time.strftime('%A, %B %d, %Y')}")
 
 # Add version information
-st.sidebar.write("App Version: 1.0.0")
+st.sidebar.write("App Version: 1.0.1")
 st.sidebar.write(f"Streamlit Version: {st.__version__}")
