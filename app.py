@@ -1,11 +1,10 @@
 import streamlit as st
 import time
 import logging
-from autogen import ConversableAgent, UserProxyAgent, AssistantAgent, GroupChat, GroupChatManager
+from autogen import ConversableAgent, initiate_chats
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
-st.set_page_config(page_title="HealthBite Assistant", layout="wide")
 
 # Set up the title of the Streamlit app
 st.title("HealthBite Assistant")
@@ -14,24 +13,22 @@ st.title("HealthBite Assistant")
 OPEN_API_KEY = st.secrets["OPENAI_API_KEY"]
 config_list = [{"model": "gpt-3.5-turbo", "api_key": OPEN_API_KEY}]
 
-# Initialize agents
-assistant = AssistantAgent(
-    name="assistant",
-    system_message="You are a helpful assistant for patient onboarding. Gather the patient's name, chronic disease, zip code, and meal cuisine preference.",
+# Initialize ConversableAgents
+onboarding_personal_information_agent = ConversableAgent(
+    name="onboarding_personal_information_agent",
+    system_message='''You are a helpful patient onboarding agent. Your job is to gather the patient's name, their chronic disease, zip code, and meal cuisine preference.''',
     llm_config={"config_list": config_list},
-)
-
-user_proxy = UserProxyAgent(
-    name="user_proxy",
-    human_input_mode="NEVER",
-    max_consecutive_auto_reply=2,
-    is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
     code_execution_config={"use_docker": False},
+    human_input_mode="NEVER",
 )
 
-# Create GroupChat
-groupchat = GroupChat(agents=[user_proxy, assistant], messages=[], max_round=5)
-manager = GroupChatManager(groupchat=groupchat, llm_config={"config_list": config_list})
+customer_proxy_agent = ConversableAgent(
+    name="customer_proxy_agent",
+    llm_config=False,
+    code_execution_config={"use_docker": False},
+    human_input_mode="ALWAYS",
+    is_termination_msg=lambda msg: "terminate" in msg.get("content", "").lower(),
+)
 
 # Session state to store the chat history
 if "messages" not in st.session_state:
@@ -45,15 +42,26 @@ for message in st.session_state.messages:
 # Function to run chat with timeout
 def run_chat_with_timeout(user_input, timeout=30):
     start_time = time.time()
+    simplified_chat = [
+        {
+            "sender": onboarding_personal_information_agent,
+            "recipient": customer_proxy_agent,
+            "message": user_input,
+            "summary_method": "reflection_with_llm",
+            "max_turns": 2,
+            "clear_history": False
+        }
+    ]
+    
     while time.time() - start_time < timeout:
         try:
-            return manager.initiate_chat(
-                manager.groupchat.agents[0],
-                message=user_input
-            )
+            result = initiate_chats(simplified_chat)
+            logging.info(f"Chat result: {result}")
+            return result
         except Exception as e:
             logging.error(f"Error in chat initiation: {e}")
             time.sleep(1)  # Wait a bit before retrying
+    
     raise TimeoutError("Chat initiation timed out")
 
 # Accept user input
@@ -69,11 +77,8 @@ if user_input:
         with st.spinner('Waiting for response...'):
             chat_result = run_chat_with_timeout(user_input)
         
-        logging.info(f"Chat result: {chat_result}")
-        st.json(chat_result)  # Display raw chat result for debugging
-
         if chat_result:
-            assistant_response = chat_result.get("content", "No response from assistant")
+            assistant_response = chat_result[-1]['message']
             with st.chat_message("assistant"):
                 st.markdown(assistant_response)
             st.session_state.messages.append({"role": "assistant", "content": assistant_response})
