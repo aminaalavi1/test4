@@ -22,7 +22,6 @@ onboarding_personal_information_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-# Change human_input_mode to NEVER for customer_proxy_agent to avoid interaction issues
 customer_proxy_agent = ConversableAgent(
     name="customer_proxy_agent",
     llm_config=False,
@@ -72,11 +71,16 @@ if user_input:
             result = initiate_chats(simplified_chat)
             logging.info(f"Chat result: {result}")
 
-            # Check for result and process
-            if result:
-                assistant_response = result[-1]['message']
+            # Check for result and process the chat history
+            if result and result[0].chat_history:
+                chat_history = result[0].chat_history  # Get the chat history from the ChatResult object
+                assistant_response = chat_history[-1]['content']  # Get the content of the last message
+                
+                # Display the assistant's response
                 with st.chat_message("assistant"):
                     st.markdown(assistant_response)
+                
+                # Append the assistant's response to chat history
                 st.session_state.messages.append({"role": "assistant", "content": assistant_response})
             else:
                 st.write("No response received from the agent.")
