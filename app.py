@@ -19,7 +19,7 @@ onboarding_personal_information_agent = ConversableAgent(
     When they give you this information, ask them what their meal preferences are, the cuisine they like, and what ingredients they would like to avoid.
     Do not ask for other information. Return 'TERMINATE' when you have gathered all the information.''',
     llm_config={"config_list": config_list},
-    code_execution_config=False,
+    code_execution_config={"use_docker": False},  # Disable Docker for code execution
     human_input_mode="NEVER",
 )
 
@@ -35,7 +35,8 @@ customer_engagement_agent = ConversableAgent(
     llm_config={"config_list": config_list},
     code_execution_config={
         "allowed_imports": ["pandas", "matplotlib", "seaborn"],
-        "execution_timeout": 60
+        "execution_timeout": 60,
+        "use_docker": False  # Disable Docker for code execution
     },
     human_input_mode="NEVER",
     is_termination_msg=lambda msg: "terminate" in msg.get("content").lower(),
@@ -44,7 +45,7 @@ customer_engagement_agent = ConversableAgent(
 customer_proxy_agent = ConversableAgent(
     name="customer_proxy_agent",
     llm_config=False,
-    code_execution_config=False,
+    code_execution_config={"use_docker": False},  # Disable Docker
     human_input_mode="ALWAYS",
     is_termination_msg=lambda msg: "terminate" in msg.get("content").lower(),
 )
