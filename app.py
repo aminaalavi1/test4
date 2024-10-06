@@ -54,22 +54,8 @@ customer_proxy_agent = ConversableAgent(
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat messages from the history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Accept user input
-if user_input := st.chat_input("You: "):
-    # Append the user input to chat history
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    
-    # Display the user message
-    with st.chat_message("user"):
-        st.markdown(user_input)
-    
-    # Create the conversation flow based on user input and agents
-    # Use a more explicit chat handoff
+# Function to handle onboarding conversation step
+def onboarding_conversation(user_input):
     chats = [
         {
             "sender": onboarding_personal_information_agent,
@@ -78,7 +64,13 @@ if user_input := st.chat_input("You: "):
             "summary_method": "reflection_with_llm",
             "max_turns": 2,  # Let the onboarding agent gather initial information
             "clear_history": False
-        },
+        }
+    ]
+    return initiate_chats(chats)
+
+# Function to handle engagement conversation step (meal plan generation)
+def engagement_conversation():
+    chats = [
         {
             "sender": customer_proxy_agent,
             "recipient": customer_engagement_agent,
@@ -87,30 +79,50 @@ if user_input := st.chat_input("You: "):
             "max_turns": 1,  # Engagement agent generates the meal plan
         }
     ]
+    return initiate_chats(chats)
 
-    # Log for debugging
-    st.write("Starting chat interaction...")
+# Display chat messages from the history on app rerun
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-    # Run the conversation flow
-    try:
-        chat_results = initiate_chats(chats)
+# Accept user input step-by-step
+if "onboarding_complete" not in st.session_state:
+    # Collect user input for onboarding
+    if user_input := st.chat_input("Tell us your name, zip code, and chronic disease:"):
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.chat_message("user"):
+            st.markdown(user_input)
         
-        # Debugging: Show chat results
-        st.write(chat_results)
-
-        # Get the assistant's response from the chat results
-        if chat_results and len(chat_results) > 0:
-            assistant_response = chat_results[-1]['message']  # Assuming the last message is the assistant's response
-
-            # Display assistant's response
-            with st.chat_message("assistant"):
-                st.markdown(assistant_response)
+        # Run onboarding conversation
+        try:
+            chat_results = onboarding_conversation(user_input)
+            st.session_state.onboarding_complete = True  # Mark onboarding as complete
             
-            # Append assistant's response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-        else:
-            st.write("No response received from agents.")
+            # Get the agent's response and display it
+            for result in chat_results:
+                assistant_response = result['message']
+                with st.chat_message("assistant"):
+                    st.markdown(assistant_response)
+                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+        except Exception as e:
+            st.error(f"Error during onboarding: {e}")
 
-    except Exception as e:
-        st.error(f"An error occurred during chat interaction: {e}")
-        st.write(f"Error details: {e}")
+elif "meal_plan_generated" not in st.session_state:
+    # Now that onboarding is complete, move to meal plan generation
+    if st.button("Generate Meal Plan"):
+        try:
+            chat_results = engagement_conversation()
+            st.session_state.meal_plan_generated = True  # Mark meal plan as generated
+            
+            # Get the agent's response and display it
+            for result in chat_results:
+                assistant_response = result['message']
+                with st.chat_message("assistant"):
+                    st.markdown(assistant_response)
+                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+        except Exception as e:
+            st.error(f"Error during meal plan generation: {e}")
+
+else:
+    st.write("Meal plan generation is complete!")
