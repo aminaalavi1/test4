@@ -1,0 +1,5 @@
+streamlit==1.26.0  # (or the latest stable version)
+autogen==1.0.0  # (replace with the correct version of autogen you're using)
+pandas==2.1.1  # (or the latest stable version)
+matplotlib==3.8.0
+seaborn==0.12.2
