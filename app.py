@@ -10,7 +10,7 @@ st.title("HealthBite Assistant")
 OPEN_API_KEY = st.secrets["OPENAI_API_KEY"]
 config_list = [{"model": "gpt-3.5-turbo", "api_key": OPEN_API_KEY}]
 
-# Initialize ConversableAgents and explicitly disable Docker
+# Initialize ConversableAgents
 onboarding_personal_information_agent = ConversableAgent(
     name="onboarding_personal_information_agent",
     system_message='''You are a helpful patient onboarding agent,
@@ -69,33 +69,48 @@ if user_input := st.chat_input("You: "):
         st.markdown(user_input)
     
     # Create the conversation flow based on user input and agents
+    # Use a more explicit chat handoff
     chats = [
         {
             "sender": onboarding_personal_information_agent,
             "recipient": customer_proxy_agent,
-            "message": user_input,  # Passing user input
+            "message": user_input,  # First message from user
             "summary_method": "reflection_with_llm",
-            "max_turns": 2,
+            "max_turns": 2,  # Let the onboarding agent gather initial information
             "clear_history": False
         },
         {
             "sender": customer_proxy_agent,
             "recipient": customer_engagement_agent,
-            "message": "Let's get your meal plan ready!",
+            "message": "Now that we have the initial information, let's proceed with your meal plan.",
             "summary_method": "reflection_with_llm",
-            "max_turns": 1,
+            "max_turns": 1,  # Engagement agent generates the meal plan
         }
     ]
 
+    # Log for debugging
+    st.write("Starting chat interaction...")
+
     # Run the conversation flow
-    chat_results = initiate_chats(chats)
+    try:
+        chat_results = initiate_chats(chats)
+        
+        # Debugging: Show chat results
+        st.write(chat_results)
 
-    # Get the assistant's response from the chat results
-    assistant_response = chat_results[-1]['message']  # Assuming the last message is the assistant's response
+        # Get the assistant's response from the chat results
+        if chat_results and len(chat_results) > 0:
+            assistant_response = chat_results[-1]['message']  # Assuming the last message is the assistant's response
 
-    # Display assistant's response
-    with st.chat_message("assistant"):
-        st.markdown(assistant_response)
-    
-    # Append assistant's response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+            # Display assistant's response
+            with st.chat_message("assistant"):
+                st.markdown(assistant_response)
+            
+            # Append assistant's response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+        else:
+            st.write("No response received from agents.")
+
+    except Exception as e:
+        st.error(f"An error occurred during chat interaction: {e}")
+        st.write(f"Error details: {e}")
