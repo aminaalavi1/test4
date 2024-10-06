@@ -22,13 +22,13 @@ onboarding_personal_information_agent = ConversableAgent(
     human_input_mode="NEVER",
 )
 
-# Force a response from customer_proxy_agent by giving it a static message
+# Add LLM configuration to customer_proxy_agent
 customer_proxy_agent = ConversableAgent(
     name="customer_proxy_agent",
     system_message='''You are here to assist the onboarding agent. Please respond with a greeting.''',
-    llm_config=False,
+    llm_config={"config_list": config_list},  # Added LLM configuration
     code_execution_config={"use_docker": False},
-    human_input_mode="NEVER",  # Keep this as NEVER
+    human_input_mode="NEVER",
     is_termination_msg=lambda msg: "terminate" in msg.get("content", "").lower(),
 )
 
