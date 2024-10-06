@@ -1,5 +1,4 @@
 import streamlit as st
-import time
 import logging
 from autogen import ConversableAgent, initiate_chats
 
@@ -16,7 +15,7 @@ config_list = [{"model": "gpt-3.5-turbo", "api_key": OPEN_API_KEY}]
 # Initialize ConversableAgents
 onboarding_personal_information_agent = ConversableAgent(
     name="onboarding_personal_information_agent",
-    system_message='''You are a helpful patient onboarding agent. Your job is to gather the patient's name, their chronic disease, zip code, and meal cuisine preference.''',
+    system_message='''You are a helpful patient onboarding agent.''',
     llm_config={"config_list": config_list},
     code_execution_config={"use_docker": False},
     human_input_mode="NEVER",
@@ -39,31 +38,6 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Function to run chat with timeout
-def run_chat_with_timeout(user_input, timeout=30):
-    start_time = time.time()
-    simplified_chat = [
-        {
-            "sender": onboarding_personal_information_agent,
-            "recipient": customer_proxy_agent,
-            "message": user_input,
-            "summary_method": "reflection_with_llm",
-            "max_turns": 2,
-            "clear_history": False
-        }
-    ]
-    
-    while time.time() - start_time < timeout:
-        try:
-            result = initiate_chats(simplified_chat)
-            logging.info(f"Chat result: {result}")
-            return result
-        except Exception as e:
-            logging.error(f"Error in chat initiation: {e}")
-            time.sleep(1)  # Wait a bit before retrying
-    
-    raise TimeoutError("Chat initiation timed out")
-
 # Accept user input
 user_input = st.chat_input("You: ")
 if user_input:
@@ -75,18 +49,28 @@ if user_input:
 
     try:
         with st.spinner('Waiting for response...'):
-            chat_result = run_chat_with_timeout(user_input)
-        
-        if chat_result:
-            assistant_response = chat_result[-1]['message']
-            with st.chat_message("assistant"):
-                st.markdown(assistant_response)
-            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-        else:
-            st.write("No response received from the agent.")
+            logging.info("Starting chat initiation...")
+            simplified_chat = [
+                {
+                    "sender": onboarding_personal_information_agent,
+                    "recipient": customer_proxy_agent,
+                    "message": user_input,
+                    "summary_method": "reflection_with_llm",
+                    "max_turns": 2,
+                    "clear_history": False
+                }
+            ]
+            result = initiate_chats(simplified_chat)
+            logging.info(f"Chat result: {result}")
 
-    except TimeoutError:
-        st.error("The conversation timed out. Please try again.")
+            if result:
+                assistant_response = result[-1]['message']
+                with st.chat_message("assistant"):
+                    st.markdown(assistant_response)
+                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+            else:
+                st.write("No response received from the agent.")
+
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
         logging.error(f"Error details: {e}", exc_info=True)
@@ -98,5 +82,5 @@ if st.button("Clear Chat History"):
 
 # Display current date and version info
 st.write(f"Current date: {time.strftime('%A, %B %d, %Y')}")
-st.sidebar.write("App Version: 1.0.4")
+st.sidebar.write("App Version: 1.0.5")
 st.sidebar.write(f"Streamlit Version: {st.__version__}")
