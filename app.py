@@ -1,8 +1,10 @@
 import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
-from autogen import ConversableAgent, initiate_chats
 import time
+from autogen import ConversableAgent, initiate_chats
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 # Set up the title of the Streamlit app
 st.title("HealthBite Assistant")
@@ -11,14 +13,10 @@ st.title("HealthBite Assistant")
 OPEN_API_KEY = st.secrets["OPENAI_API_KEY"]
 config_list = [{"model": "gpt-3.5-turbo", "api_key": OPEN_API_KEY}]
 
-# Initialize ConversableAgents and explicitly disable Docker
+# Initialize ConversableAgents
 onboarding_personal_information_agent = ConversableAgent(
     name="onboarding_personal_information_agent",
-    system_message='''You are a helpful patient onboarding agent,
-    you are here to help new patients get started with our product.
-    Your job is to gather the patient's name, their chronic disease, zip code, and meal cuisine preference.
-    When they give you this information, ask them what their meal preferences are, the cuisine they like, and what ingredients they would like to avoid.
-    Do not ask for other information. Return 'TERMINATE' when you have gathered all the information.''',
+    system_message='''You are a helpful patient onboarding agent. Your job is to gather the patient's name, their chronic disease, zip code, and meal cuisine preference. When they give you this information, ask them what their meal preferences are, the cuisine they like, and what ingredients they would like to avoid. Do not ask for other information. Return 'TERMINATE' when you have gathered all the information.''',
     llm_config={"config_list": config_list},
     code_execution_config={"use_docker": False},
     human_input_mode="NEVER",
@@ -41,9 +39,9 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Function to run chat
-@st.cache_data(show_spinner=False)
-def run_chat(user_input):
+# Function to run chat with timeout
+def run_chat_with_timeout(user_input, timeout=30):
+    start_time = time.time()
     simplified_chat = [
         {
             "sender": onboarding_personal_information_agent,
@@ -54,54 +52,50 @@ def run_chat(user_input):
             "clear_history": False
         }
     ]
-    return initiate_chats(simplified_chat)
+    
+    while time.time() - start_time < timeout:
+        try:
+            return initiate_chats(simplified_chat)
+        except Exception as e:
+            logging.error(f"Error in chat initiation: {e}")
+            time.sleep(1)  # Wait a bit before retrying
+    
+    raise TimeoutError("Chat initiation timed out")
 
 # Accept user input
 if user_input := st.chat_input("You: "):
-    # Append the user input to chat history
     st.session_state.messages.append({"role": "user", "content": user_input})
-    
-    # Display the user message
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # Phase 1: Onboarding agent collects info
-    st.write("Phase 1: Onboarding agent sending message to customer proxy...")
+    st.write("Processing your request...")
 
-    # Start simplified chat interaction
     try:
-        with st.spinner('Processing your request...'):
-            simplified_results = run_chat(user_input)
+        with st.spinner('Waiting for response...'):
+            simplified_results = run_chat_with_timeout(user_input)
         
-        # Debugging: Show results from simplified chat
-        st.write("Debug: Simplified Chat Results:", simplified_results)
+        logging.info(f"Chat results: {simplified_results}")
 
-        # Check if there are results from the onboarding agent
         if simplified_results and len(simplified_results) > 0:
             onboarding_response = simplified_results[-1]['message']
-
-            # Display onboarding response
             with st.chat_message("assistant"):
                 st.markdown(onboarding_response)
-
-            # Append onboarding response to chat history
             st.session_state.messages.append({"role": "assistant", "content": onboarding_response})
-
         else:
-            st.write("Debug: No response received from onboarding agent or proxy agent.")
+            st.write("No response received from the agent.")
 
+    except TimeoutError:
+        st.error("The conversation timed out. Please try again.")
     except Exception as e:
-        st.error(f"An error occurred during the chat interaction: {str(e)}")
-        st.write(f"Debug: Error details: {e}")
+        st.error(f"An error occurred: {str(e)}")
+        logging.error(f"Error details: {e}", exc_info=True)
 
 # Add a button to clear chat history
 if st.button("Clear Chat History"):
     st.session_state.messages = []
     st.rerun()
 
-# Display current date
+# Display current date and version info
 st.write(f"Current date: {time.strftime('%A, %B %d, %Y')}")
-
-# Add version information
-st.sidebar.write("App Version: 1.0.2")
+st.sidebar.write("App Version: 1.0.3")
 st.sidebar.write(f"Streamlit Version: {st.__version__}")
