@@ -10,7 +10,7 @@ st.title("HealthBite Assistant")
 OPEN_API_KEY = st.secrets["OPENAI_API_KEY"]
 config_list = [{"model": "gpt-3.5-turbo", "api_key": OPEN_API_KEY}]
 
-# Initialize ConversableAgents
+# Initialize ConversableAgents and explicitly disable Docker
 onboarding_personal_information_agent = ConversableAgent(
     name="onboarding_personal_information_agent",
     system_message='''You are a helpful patient onboarding agent,
@@ -29,88 +29,4 @@ customer_engagement_agent = ConversableAgent(
     - Recipes for each meal, detailing the exact ingredients needed and how to cook the meal.
     - A grocery list compiling all the ingredients required for the day.
     - Serving sizes and calorie counts for each meal.
-    - Nutritional information like servings of greens, fruits, vegetables, fiber, proteins, etc.
-    Additionally, generate a data frame with Date, Meal (like breakfast/Lunch/Dinner), Fat%, calorie intake, and sugar.
-    Also, include a plot visualizing the nutritional information.''',
-    llm_config={"config_list": config_list},
-    code_execution_config={
-        "allowed_imports": ["pandas", "matplotlib", "seaborn"],
-        "execution_timeout": 60,
-        "use_docker": False  # Disable Docker for code execution
-    },
-    human_input_mode="NEVER",
-    is_termination_msg=lambda msg: "terminate" in msg.get("content").lower(),
-)
-
-customer_proxy_agent = ConversableAgent(
-    name="customer_proxy_agent",
-    llm_config=False,
-    code_execution_config={"use_docker": False},  # Disable Docker
-    human_input_mode="ALWAYS",
-    is_termination_msg=lambda msg: "terminate" in msg.get("content").lower(),
-)
-
-# Session state to store the chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Display chat messages from the history on app rerun
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Accept user input
-if user_input := st.chat_input("You: "):
-    # Append the user input to chat history
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    
-    # Display the user message
-    with st.chat_message("user"):
-        st.markdown(user_input)
-    
-    # Create the conversation flow based on user input and agents
-    # Use a more explicit chat handoff
-    chats = [
-        {
-            "sender": onboarding_personal_information_agent,
-            "recipient": customer_proxy_agent,
-            "message": user_input,  # First message from user
-            "summary_method": "reflection_with_llm",
-            "max_turns": 2,  # Let the onboarding agent gather initial information
-            "clear_history": False
-        },
-        {
-            "sender": customer_proxy_agent,
-            "recipient": customer_engagement_agent,
-            "message": "Now that we have the initial information, let's proceed with your meal plan.",
-            "summary_method": "reflection_with_llm",
-            "max_turns": 1,  # Engagement agent generates the meal plan
-        }
-    ]
-
-    # Log for debugging
-    st.write("Starting chat interaction...")
-
-    # Run the conversation flow
-    try:
-        chat_results = initiate_chats(chats)
-        
-        # Debugging: Show chat results
-        st.write(chat_results)
-
-        # Get the assistant's response from the chat results
-        if chat_results and len(chat_results) > 0:
-            assistant_response = chat_results[-1]['message']  # Assuming the last message is the assistant's response
-
-            # Display assistant's response
-            with st.chat_message("assistant"):
-                st.markdown(assistant_response)
-            
-            # Append assistant's response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-        else:
-            st.write("No response received from agents.")
-
-    except Exception as e:
-        st.error(f"An error occurred during chat interaction: {e}")
-        st.write(f"Error details: {e}")
+    - Nutritional information like servings of greens, fruit
