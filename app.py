@@ -1,10 +1,11 @@
 import streamlit as st
 import time
-from autogen import ConversableAgent, initiate_chats
 import logging
+from autogen import ConversableAgent, UserProxyAgent, AssistantAgent, GroupChat, GroupChatManager
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
+st.set_page_config(page_title="HealthBite Assistant", layout="wide")
 
 # Set up the title of the Streamlit app
 st.title("HealthBite Assistant")
@@ -13,22 +14,24 @@ st.title("HealthBite Assistant")
 OPEN_API_KEY = st.secrets["OPENAI_API_KEY"]
 config_list = [{"model": "gpt-3.5-turbo", "api_key": OPEN_API_KEY}]
 
-# Initialize ConversableAgents
-onboarding_personal_information_agent = ConversableAgent(
-    name="onboarding_personal_information_agent",
-    system_message='''You are a helpful patient onboarding agent. Your job is to gather the patient's name, their chronic disease, zip code, and meal cuisine preference. When they give you this information, ask them what their meal preferences are, the cuisine they like, and what ingredients they would like to avoid. Do not ask for other information. Return 'TERMINATE' when you have gathered all the information.''',
+# Initialize agents
+assistant = AssistantAgent(
+    name="assistant",
+    system_message="You are a helpful assistant for patient onboarding. Gather the patient's name, chronic disease, zip code, and meal cuisine preference.",
     llm_config={"config_list": config_list},
-    code_execution_config={"use_docker": False},
-    human_input_mode="NEVER",
 )
 
-customer_proxy_agent = ConversableAgent(
-    name="customer_proxy_agent",
-    llm_config=False,
+user_proxy = UserProxyAgent(
+    name="user_proxy",
+    human_input_mode="NEVER",
+    max_consecutive_auto_reply=2,
+    is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
     code_execution_config={"use_docker": False},
-    human_input_mode="ALWAYS",
-    is_termination_msg=lambda msg: "terminate" in msg.get("content", "").lower(),
 )
+
+# Create GroupChat
+groupchat = GroupChat(agents=[user_proxy, assistant], messages=[], max_round=5)
+manager = GroupChatManager(groupchat=groupchat, llm_config={"config_list": config_list})
 
 # Session state to store the chat history
 if "messages" not in st.session_state:
@@ -42,28 +45,20 @@ for message in st.session_state.messages:
 # Function to run chat with timeout
 def run_chat_with_timeout(user_input, timeout=30):
     start_time = time.time()
-    simplified_chat = [
-        {
-            "sender": onboarding_personal_information_agent,
-            "recipient": customer_proxy_agent,
-            "message": user_input,
-            "summary_method": "reflection_with_llm",
-            "max_turns": 2,
-            "clear_history": False
-        }
-    ]
-    
     while time.time() - start_time < timeout:
         try:
-            return initiate_chats(simplified_chat)
+            return manager.initiate_chat(
+                manager.groupchat.agents[0],
+                message=user_input
+            )
         except Exception as e:
             logging.error(f"Error in chat initiation: {e}")
             time.sleep(1)  # Wait a bit before retrying
-    
     raise TimeoutError("Chat initiation timed out")
 
 # Accept user input
-if user_input := st.chat_input("You: "):
+user_input = st.chat_input("You: ")
+if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
@@ -72,15 +67,16 @@ if user_input := st.chat_input("You: "):
 
     try:
         with st.spinner('Waiting for response...'):
-            simplified_results = run_chat_with_timeout(user_input)
+            chat_result = run_chat_with_timeout(user_input)
         
-        logging.info(f"Chat results: {simplified_results}")
+        logging.info(f"Chat result: {chat_result}")
+        st.json(chat_result)  # Display raw chat result for debugging
 
-        if simplified_results and len(simplified_results) > 0:
-            onboarding_response = simplified_results[-1]['message']
+        if chat_result:
+            assistant_response = chat_result.get("content", "No response from assistant")
             with st.chat_message("assistant"):
-                st.markdown(onboarding_response)
-            st.session_state.messages.append({"role": "assistant", "content": onboarding_response})
+                st.markdown(assistant_response)
+            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
         else:
             st.write("No response received from the agent.")
 
@@ -97,5 +93,5 @@ if st.button("Clear Chat History"):
 
 # Display current date and version info
 st.write(f"Current date: {time.strftime('%A, %B %d, %Y')}")
-st.sidebar.write("App Version: 1.0.3")
+st.sidebar.write("App Version: 1.0.4")
 st.sidebar.write(f"Streamlit Version: {st.__version__}")
