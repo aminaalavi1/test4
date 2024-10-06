@@ -89,7 +89,7 @@ if user_input := st.chat_input("You: "):
         # Debugging: Show phase 1 results
         st.write("Phase 1 Results:", phase1_results)
 
-        # Get the result and check if information was gathered
+        # Check if there are results from the onboarding agent
         if phase1_results and len(phase1_results) > 0:
             onboarding_response = phase1_results[-1]['message']
 
