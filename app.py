@@ -10,7 +10,7 @@ st.title("HealthBite Assistant")
 OPEN_API_KEY = st.secrets["OPENAI_API_KEY"]
 config_list = [{"model": "gpt-3.5-turbo", "api_key": OPEN_API_KEY}]
 
-# Initialize ConversableAgents and explicitly disable Docker
+# Initialize ConversableAgents
 onboarding_personal_information_agent = ConversableAgent(
     name="onboarding_personal_information_agent",
     system_message='''You are a helpful patient onboarding agent,
@@ -68,10 +68,9 @@ if user_input := st.chat_input("You: "):
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    # Phase 1: Onboarding agent collects info
-    st.write("Phase 1: Onboarding agent collecting info...")
-
-    onboarding_chat = [
+    # Create the conversation flow based on user input and agents
+    # Use a more explicit chat handoff
+    chats = [
         {
             "sender": onboarding_personal_information_agent,
             "recipient": customer_proxy_agent,
@@ -79,61 +78,38 @@ if user_input := st.chat_input("You: "):
             "summary_method": "reflection_with_llm",
             "max_turns": 2,  # Let the onboarding agent gather initial information
             "clear_history": False
+        },
+        {
+            "sender": customer_proxy_agent,
+            "recipient": customer_engagement_agent,
+            "message": "Now that we have the initial information, let's proceed with your meal plan.",
+            "summary_method": "reflection_with_llm",
+            "max_turns": 1,  # Engagement agent generates the meal plan
         }
     ]
 
-    # Start phase 1
+    # Log for debugging
+    st.write("Starting chat interaction...")
+
+    # Run the conversation flow
     try:
-        phase1_results = initiate_chats(onboarding_chat)
+        chat_results = initiate_chats(chats)
         
-        # Debugging: Show phase 1 results
-        st.write("Phase 1 Results:", phase1_results)
+        # Debugging: Show chat results
+        st.write(chat_results)
 
-        # Get the result and check if information was gathered
-        if phase1_results and len(phase1_results) > 0:
-            onboarding_response = phase1_results[-1]['message']
+        # Get the assistant's response from the chat results
+        if chat_results and len(chat_results) > 0:
+            assistant_response = chat_results[-1]['message']  # Assuming the last message is the assistant's response
 
-            # Display onboarding response
+            # Display assistant's response
             with st.chat_message("assistant"):
-                st.markdown(onboarding_response)
-
-            # Append onboarding response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": onboarding_response})
-
-            # Phase 2: Engagement agent generates meal plan
-            st.write("Phase 2: Engagement agent generating meal plan...")
-
-            engagement_chat = [
-                {
-                    "sender": customer_proxy_agent,
-                    "recipient": customer_engagement_agent,
-                    "message": "Now that we have the initial information, let's proceed with your meal plan.",
-                    "summary_method": "reflection_with_llm",
-                    "max_turns": 1,  # Engagement agent generates the meal plan
-                }
-            ]
-
-            # Start phase 2
-            phase2_results = initiate_chats(engagement_chat)
-
-            # Debugging: Show phase 2 results
-            st.write("Phase 2 Results:", phase2_results)
-
-            # Get the engagement response and display
-            if phase2_results and len(phase2_results) > 0:
-                engagement_response = phase2_results[-1]['message']
-
-                # Display engagement response
-                with st.chat_message("assistant"):
-                    st.markdown(engagement_response)
-
-                # Append engagement response to chat history
-                st.session_state.messages.append({"role": "assistant", "content": engagement_response})
-
-            else:
-                st.write("No response received from engagement agent.")
+                st.markdown(assistant_response)
+            
+            # Append assistant's response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
         else:
-            st.write("No response received from onboarding agent.")
+            st.write("No response received from agents.")
 
     except Exception as e:
         st.error(f"An error occurred during chat interaction: {e}")
