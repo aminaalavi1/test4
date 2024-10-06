@@ -16,17 +16,16 @@ config_list = [{"model": "gpt-3.5-turbo", "api_key": OPEN_API_KEY}]
 # Initialize ConversableAgents
 onboarding_personal_information_agent = ConversableAgent(
     name="onboarding_personal_information_agent",
-    system_message='''You are a helpful patient onboarding agent.''',
+    system_message='''You are a helpful patient onboarding agent. Gather patient's name, chronic disease, zip code, and meal cuisine preference.''',
     llm_config={"config_list": config_list},
     code_execution_config={"use_docker": False},
     human_input_mode="NEVER",
 )
 
-# Add LLM configuration to customer_proxy_agent
 customer_proxy_agent = ConversableAgent(
     name="customer_proxy_agent",
-    system_message='''You are here to assist the onboarding agent. Please respond with a greeting.''',
-    llm_config={"config_list": config_list},  # Added LLM configuration
+    system_message='''You assist the onboarding agent by providing responses.''',
+    llm_config={"config_list": config_list},
     code_execution_config={"use_docker": False},
     human_input_mode="NEVER",
     is_termination_msg=lambda msg: "terminate" in msg.get("content", "").lower(),
@@ -61,7 +60,7 @@ if user_input:
                     "recipient": customer_proxy_agent,
                     "message": user_input,
                     "summary_method": "reflection_with_llm",
-                    "max_turns": 2,
+                    "max_turns": 1,  # Limit turns to reduce looping
                     "clear_history": False
                 }
             ]
